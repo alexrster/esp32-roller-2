@@ -37,9 +37,9 @@
 
 #define WDT_TIMEOUT_SEC               20
 
-#define RELAY_1_PIN                   17
-#define RELAY_2_PIN                   18
-#define RELAY_3_PIN                   16
+#define RELAY_BLINES_DOWN_PIN         18
+#define RELAY_BLINES_UP_PIN           17
+#define RELAY_AUDIO_PIN               16
 #define REEDSWITCH_1_PIN              21
 #define BUTTON_1_PIN                  33
 // #define BUTTON_1_LED_PIN              34

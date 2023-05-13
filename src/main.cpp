@@ -35,9 +35,9 @@ Preferences preferences;
 WiFiClient wifiClient;
 PubSub pubsub(wifiClient);
 
-SwitchRelayPin swAudioPower(RELAY_1_PIN);
-SwitchRelayPin relayBlindsUp(RELAY_2_PIN, 0);
-SwitchRelayPin relayBlindsDown(RELAY_3_PIN, 0);
+SwitchRelayPin swAudioPower(RELAY_BLINES_DOWN_PIN);
+SwitchRelayPin relayBlindsUp(RELAY_BLINES_UP_PIN, 0);
+SwitchRelayPin relayBlindsDown(RELAY_AUDIO_PIN, 0);
 ToggleButton btnOnOff(BUTTON_1_PIN, 100, INPUT_PULLUP);
 BlindsController blindsController(relayBlindsUp, relayBlindsDown, REEDSWITCH_1_PIN);
 
