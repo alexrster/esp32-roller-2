@@ -2,9 +2,9 @@
 #define BLINDS_CONTROLLER_H
 
 #include <Arduino.h>
-#include "SwitchRelay.h"
+#include <SwitchRelay.h>
 
-enum BlindsState : uint8_t { 
+enum class BlindsState : uint8_t { 
   Unknown = 0,
   RollingUp,
   RollingDown,
@@ -12,11 +12,11 @@ enum BlindsState : uint8_t {
   FullDown
 };
 
+typedef std::function<void()> BlindsStateChangedCallback;
+
 class BlindsController {
   public:
-  typedef std::function<void()> BlindsStateChangedCallback;
-
-    BlindsController(SwitchRelay motorUp, SwitchRelay motorDown, uint8_t edgeDetectorPin)
+    BlindsController(SwitchRelayPin motorUp, SwitchRelayPin motorDown, uint8_t edgeDetectorPin)
       : motorUp(motorUp), motorDown(motorDown), edgeDetectorPin(edgeDetectorPin)
     { 
       pinMode(edgeDetectorPin, INPUT_PULLUP);
@@ -39,11 +39,10 @@ class BlindsController {
           lastBlindsZero = blindsZero;
 
           if (blindsZero) {
-            motorUp.setOff();
-            motorDown.setOff();
+            stop();
 
-            if (state == RollingUp) state = FullUp;
-            else if (state == RollingDown) state = FullDown;
+            if (state == BlindsState::RollingUp) setState(BlindsState::FullUp);
+            else if (state == BlindsState::RollingDown) setState(BlindsState::FullDown);
 
             if (blindsEdgeDetectedCb != NULL)
               blindsEdgeDetectedCb();
@@ -67,7 +66,7 @@ class BlindsController {
       if (state == BlindsState::FullUp || state == BlindsState::RollingUp) return;
       motorDown.setOff();
 
-      state = BlindsState::RollingUp;
+      setState(BlindsState::RollingUp);
       motorUp.setOn();
     }
 
@@ -75,21 +74,30 @@ class BlindsController {
       if (state == BlindsState::FullDown || state == BlindsState::RollingDown) return;
       motorUp.setOff();
 
-      state = BlindsState::RollingDown;
+      setState(BlindsState::RollingDown);
       motorDown.setOn();
     }
 
-    static BlindsController create(uint8_t swUpPin, uint8_t swDownPin, uint8_t edgeDetectorPin) {
-      return BlindsController(SwitchRelayPin(swUpPin), SwitchRelayPin(swDownPin), edgeDetectorPin);
+    void stop() {
+      motorUp.setOff();
+      motorDown.setOff();
     }
   
   private:
-    SwitchRelay motorUp;
-    SwitchRelay motorDown;
+    SwitchRelayPin motorUp;
+    SwitchRelayPin motorDown;
     uint8_t edgeDetectorPin;
     unsigned long lastBlindsRead = 0, lastBlindsZero = 0;
     BlindsStateChangedCallback blindsEdgeDetectedCb = NULL, blindsStateChangedCb = NULL;
     BlindsState state;
+
+    void setState(BlindsState s) {
+      if (state == s) return;
+      state = s;
+
+      if (blindsStateChangedCb != NULL)
+        blindsStateChangedCb();
+    }
 };
 
 #endif

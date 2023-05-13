@@ -1,14 +1,15 @@
 #include "app.h"
 #include <rom/rtc.h>
+#include <esp_task_wdt.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <ArduinoOTA.h>
-#include <esp_task_wdt.h>
-#include <Preferences.h>
 #include <SwitchRelay.h>
 #include <BlindsController.h>
-#include <pubsub.h>
+#include "pubsub.h"
 #include "reset_info.h"
+#include <ArduinoOTA.h>
+#include <PushButton.h>
+#include <Preferences.h>
 
 RESET_REASON
   reset_reason[2];
@@ -34,7 +35,11 @@ Preferences preferences;
 WiFiClient wifiClient;
 PubSub pubsub(wifiClient);
 
-BlindsController blindsController = BlindsController::create(RELAY_2_PIN, RELAY_3_PIN, REEDSWITCH_1_PIN);
+SwitchRelayPin swAudioPower(RELAY_1_PIN);
+SwitchRelayPin relayBlindsUp(RELAY_2_PIN, 0);
+SwitchRelayPin relayBlindsDown(RELAY_3_PIN, 0);
+ToggleButton btnOnOff(BUTTON_1_PIN, 100, INPUT_PULLUP);
+BlindsController blindsController(relayBlindsUp, relayBlindsDown, REEDSWITCH_1_PIN);
 
 void restart(char code) {
   preferences.putULong("SW_RESET_UPTIME", millis());
@@ -95,8 +100,26 @@ void onPubSubRestart(uint8_t *payload, unsigned int length) {
   restart(RESET_ON_MQTT_RESET_TOPIC);
 }
 
-void onPubSubBlindsPositionSet(uint8_t *payload, unsigned int length) { 
-  // if (payload[0] == '1') hallAlert.blink(5000);
+void onPubSubBlindsStateSet(uint8_t *payload, unsigned int length) { 
+  if (length == 0) return;
+
+  if (payload[0] == 'u') {
+    blindsController.pushUp();
+  }
+  else if (payload[0] == 'd') {
+    blindsController.pushDown();
+  }
+  else if (payload[0] == 's') {
+    blindsController.stop();
+  }
+}
+
+void onPubSubAudioStateSet(uint8_t *payload, unsigned int length) {
+  if (length == 0) return;
+
+  bool val = parseBooleanMessage(payload, length);
+  if (val) swAudioPower.setOn();
+  else swAudioPower.setOff();
 }
 
 void onBlindsStateChanged() {
@@ -122,9 +145,28 @@ void onBlindsStateChanged() {
   pubsub.publish(MQTT_PATH_PREFIX "/blinds/state", stateString.c_str());
 }
 
-void setup_pubsub() {
-  pubsub.subscribe(MQTT_PATH_PREFIX "/restart", MQTTQOS0, onPubSubRestart);
-  pubsub.subscribe(MQTT_PATH_PREFIX "/blinds/position/set", MQTTQOS0, onPubSubBlindsPositionSet);
+void onButtonOnOffClick() {
+  if (btnOnOff.getState() == ButtonState::Off) { // Released the button after PUSH
+    pubsub.publish(MQTT_PATH_PREFIX "/button_1/state", "0");
+    if (swAudioPower.getState() == SwitchState::Off)
+      swAudioPower.setOn();
+    else
+      swAudioPower.setOff();
+  }
+  else {
+    pubsub.publish(MQTT_PATH_PREFIX "/button_1/state", "1");
+  }
+}
+
+void onAudioPowerStateChanged() {
+  if (swAudioPower.getState() == SwitchState::Off) {
+    digitalWrite(BUTTON_1_LED_PIN, 1);
+    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "1");
+  }
+  else {
+    digitalWrite(BUTTON_1_LED_PIN, 0);
+    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "0");
+  }
 }
 
 void setup() {
@@ -134,10 +176,6 @@ void setup() {
   preferences.begin("roller-02");
   runCounter = preferences.getULong("__RUN_N", 0) + 1;
   preferences.putULong("__RUN_N", runCounter);
-
-  pinMode(RELAY_1_PIN, OUTPUT);
-  pinMode(RELAY_2_PIN, OUTPUT);
-  pinMode(RELAY_3_PIN, OUTPUT);
 
   sw_reset_reason = preferences.getUChar("SW_RESET_REASON");
 
@@ -158,30 +196,41 @@ void setup() {
   ArduinoOTA.onError(otaError);
   ArduinoOTA.begin();
 
-  setup_pubsub();
+  pinMode(BUTTON_1_LED_PIN, OUTPUT);
+
+  pubsub.subscribe(MQTT_PATH_PREFIX "/restart", MQTTQOS0, onPubSubRestart);
+  pubsub.subscribe(MQTT_PATH_PREFIX "/blinds/state/set", MQTTQOS0, onPubSubBlindsStateSet);
+  pubsub.subscribe(MQTT_PATH_PREFIX "/audio/state/set", MQTTQOS0, onPubSubAudioStateSet);
 
   blindsController.onBlindsStateChanged(onBlindsStateChanged);
+  btnOnOff.onChanged(onButtonOnOffClick);
+  swAudioPower.onStateChanged(onAudioPowerStateChanged);
 
   now = millis();
   lastWifiOnline = now;
 }
 
 bool onJustStarted() {
-    bool result = true;
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/0", get_reset_reason_info(reset_reason[0]).c_str(), true);
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/1", get_reset_reason_info(reset_reason[1]).c_str(), true);
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/uptime", String(preferences.getULong("SW_RESET_UPTIME", 0)).c_str(), true);
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/code", String((uint8_t)sw_reset_reason).c_str(), true);
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/sw", get_sw_reset_reason_info(sw_reset_reason).c_str(), true);
-    result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/run_id", String(runCounter-1).c_str(), true);
+  bool result = true;
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/0", get_reset_reason_info(reset_reason[0]).c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/1", get_reset_reason_info(reset_reason[1]).c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/uptime", String(preferences.getULong("SW_RESET_UPTIME", 0)).c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/code", String((uint8_t)sw_reset_reason).c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/sw", get_sw_reset_reason_info(sw_reset_reason).c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/restart_reason/run_id", String(runCounter-1).c_str(), true);
 
-    return result;
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/button_1/state", btnOnOff.getState() == ButtonState::On ? "1" : "0");
+  onBlindsStateChanged();
+
+  return result;
 }
 
 bool pubsub_loop(unsigned long now) {
   return pubsub.loop(now);
 }
 
+unsigned long blinkTime = 0;
+uint8_t blinkVal = 0;
 void loop() {
   esp_task_wdt_reset();
 
@@ -196,6 +245,7 @@ void loop() {
   }
 
   blindsController.loop(now);
+  btnOnOff.loop(now);
 
   if (wifiLoop()) {
     if (justStarted) {
@@ -208,6 +258,13 @@ void loop() {
   if (now - lastOtaHandle > 2000) {
     lastOtaHandle = now;
     ArduinoOTA.handle();
+  }
+
+  if (now - blinkTime > 2000) {
+    blinkTime = now;
+    blinkVal = blinkVal ? 0 : 1;
+    digitalWrite(BUTTON_1_LED_PIN, blinkVal);
+    pubsub.publish(MQTT_PATH_PREFIX "/debug/uptime", String(now).c_str());
   }
 }
 

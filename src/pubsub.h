@@ -24,10 +24,16 @@ class PubSub {
 
     void subscribe(const char* topic, uint8_t qos, message_handler_t handler) {
       topicSubscriptions.push_back(topic_subscription_t(topic, qos, handler));
+#ifdef DEBUG
+      debug_publish_subscriptions();
+#endif
     }
 
     void subscribe(const char* topic, message_handler_t handler) {
       topicSubscriptions.push_back(topic_subscription_t(topic, handler));
+#ifdef DEBUG
+      debug_publish_subscriptions();
+#endif
     }
 
     bool publish(const char* topic, const char* payload, unsigned long expiresAfterMs) {
@@ -78,11 +84,23 @@ class PubSub {
     std::list<topic_subscription_t> topicSubscriptions;
     unsigned long lastPubSubReconnectAttempt = 0;
 
+
+#ifdef DEBUG
+    unsigned long messages_sent = 0, messages_received = 0, connect_count = 0, reconnect_count = 0;
+#endif
+
     bool reconnect(unsigned long now) {
       if (now == 0 || now - lastPubSubReconnectAttempt > MQTT_RECONNECT_MILLIS) {
         lastPubSubReconnectAttempt = now;
 
+#ifdef DEBUG
+        reconnect_count++;
+#endif
+
         if (pubSubClient->connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD, MQTT_STATUS_TOPIC, MQTTQOS0, true, MQTT_STATUS_OFFLINE_MSG, true)) {
+#ifdef DEBUG
+          connect_count++;
+#endif
           pubSubClient->publish(MQTT_STATUS_TOPIC, MQTT_STATUS_ONLINE_MSG, true);
 
 #ifdef VERSION
@@ -92,6 +110,11 @@ class PubSub {
           for (auto s : topicSubscriptions) {
             pubSubClient->subscribe(s.topic.c_str(), s.qos);
           }
+
+#ifdef DEBUG
+          pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/subscriptions", "");
+          debug_publish_subscriptions();
+#endif
         }
         
         return pubSubClient->connected();
@@ -101,6 +124,10 @@ class PubSub {
     }
 
     void mqtt_on_message(char* topic, uint8_t* payload, unsigned int length) {
+#ifdef DEBUG
+      messages_received++;
+#endif
+
       for (auto& s : topicSubscriptions) {
         if (s.topic.equals(topic)) {
           s.handler(payload, length);
@@ -113,7 +140,7 @@ class PubSub {
       if (messageQueue.size() == 0) return true;
 
 #ifdef DEBUG
-      result &= pubSubClient->publish(MQTT_CLIENT_ID "/debug/pubsub/queue_length", String(messageQueue.size()).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/queue_length", String(messageQueue.size()).c_str());
 #endif
 
       while (!messageQueue.empty()) {
@@ -123,6 +150,9 @@ class PubSub {
         if (m.expires == 0 || (m.expires > 0 && m.expires < now)) {
           if (pubSubClient->publish(m.topic.c_str(), m.payload.c_str(), m.retained)) {
             result &= true;
+#ifdef DEBUG
+            messages_sent++;
+#endif
           }
           else {
             result &= false;
@@ -134,7 +164,11 @@ class PubSub {
       }
 
 #ifdef DEBUG
-      result &= pubSubClient->publish(MQTT_CLIENT_ID "/debug/pubsub/requeue_count", String(requeueMessages.size()).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/requeue_count", String(requeueMessages.size()).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/messages_sent", String(messages_sent).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/messages_received", String(messages_received).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/connect_count", String(connect_count).c_str());
+      pubSubClient->publish(MQTT_PATH_PREFIX "/debug/pubsub/reconnect_count", String(reconnect_count).c_str());
 #endif
 
       while (!requeueMessages.empty()) {
@@ -152,6 +186,17 @@ class PubSub {
 
       return pubSubClient->loop();
     }
+
+#ifdef DEBUG
+    void debug_publish_subscriptions() {
+      publish(MQTT_PATH_PREFIX "/debug/pubsub/subscriptions", String(topicSubscriptions.size()).c_str());
+      for (auto& s : topicSubscriptions) {
+        String topic(MQTT_PATH_PREFIX "/debug/pubsub/subscriptions/");
+        topic.concat(s.topic);
+        publish(topic.c_str(), "1");
+      }
+    }
+#endif
 };
 
 #endif

@@ -2,24 +2,39 @@
 #define SWITCH_RELAY_H
 
 #include <Arduino.h>
+#include <functional>
 
-typedef enum SwitchState { 
-  Off,
-  On
-} SwitchState_t;
+typedef std::function<void()> SwitchRelayStateChangedCallback;
+
+enum class SwitchState : uint8_t { Off = 0, On };
 
 class SwitchRelay {
   public:
+    SwitchRelay() { }
+
     void setOn() {
-      setState(On);
+      setState(SwitchState::On);
     }
 
     void setOff() {
-      setState(Off);
+      setState(SwitchState::Off);
     }
 
-    virtual SwitchState_t getState();
-    virtual void setState(SwitchState_t targetState);
+    virtual SwitchState getState() { return SwitchState::Off; }
+    virtual void setState(SwitchState targetState) { }
+
+    virtual void onStateChanged(SwitchRelayStateChangedCallback cb) {
+      stateChangedCallback = cb;
+    }
+  
+  protected:
+    virtual void notifyStateChanged() {
+      if (stateChangedCallback != NULL)
+        stateChangedCallback();
+    }
+  
+  private:
+    SwitchRelayStateChangedCallback stateChangedCallback = NULL;
 };
 
 class SwitchRelayPin : public SwitchRelay {
@@ -28,40 +43,42 @@ class SwitchRelayPin : public SwitchRelay {
     { }
 
     SwitchRelayPin(uint8_t pin, uint8_t onValue, uint8_t pinModeType = OUTPUT)
-      : pin(pin), onValue(onValue), offValue(onValue ? 0 : 1)
+      : SwitchRelay(), pin(pin), onValue(onValue), offValue(onValue ? 0 : 1)
     { 
       pinMode(pin, pinModeType);
       setState(state);
     }
 
-    virtual SwitchState_t getState() {
+    virtual SwitchState getState() override {
       return state;
     }
 
-    virtual void setState(SwitchState_t targetState) {
-      digitalWrite(pin, targetState == On ? onValue : offValue);
+    virtual void setState(SwitchState targetState) override {
+      digitalWrite(pin, targetState == SwitchState::On ? onValue : offValue);
       state = targetState;
+
+      notifyStateChanged();
     }
   
   private:
     const uint8_t pin, onValue, offValue;
-    SwitchState_t state = Off;
+    SwitchState state = SwitchState::Off;
 };
 
 class SwitchRelayMock : public SwitchRelay {
   public:
-    SwitchRelayMock(SwitchState_t state = Off) : state(state) 
+    SwitchRelayMock(SwitchState state = SwitchState::Off) : state(state) 
     { }
 
-    virtual SwitchState_t getState() {
+    virtual SwitchState getState() override {
       return state;
     }
 
-    virtual void setState(SwitchState_t targetState)
+    virtual void setState(SwitchState targetState) override
     { }
 
   private:
-    SwitchState_t state = Off;
+    SwitchState state = SwitchState::Off;
 };
 
 #endif
