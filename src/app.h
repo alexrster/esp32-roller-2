@@ -37,13 +37,15 @@
 
 #define WDT_TIMEOUT_SEC               20
 
-#define RELAY_BLINES_DOWN_PIN         18
-#define RELAY_BLINES_UP_PIN           17
-#define RELAY_AUDIO_PIN               16
+#define RELAY_AUDIO_PIN               17
+#define RELAY_BLINDS_UP_PIN           16
+#define RELAY_BLINDS_DOWN_PIN         18
 #define REEDSWITCH_1_PIN              21
 #define BUTTON_1_PIN                  33
 // #define BUTTON_1_LED_PIN              34
 #define BUTTON_1_LED_PIN              INT_LED_PIN
+
+#define BLINDS_ROLLING_TIMELIMIT_MS   60000
 
 extern bool parseBooleanMessage(byte* payload, unsigned int length, boolean defaultValue = false);
 

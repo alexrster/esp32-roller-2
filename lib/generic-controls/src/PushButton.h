@@ -6,7 +6,7 @@
 
 enum class ButtonState : uint8_t { Off = 0, On };
 
-typedef std::function<void()> ButtonEventCallback;
+typedef std::function<void(ButtonState)> ButtonStateCallback;
 
 class PushButton
 {
@@ -22,9 +22,9 @@ class PushButton
       return state;
     }
 
-    void onChanged(ButtonEventCallback cb)
+    void onButtonStateChanged(ButtonStateCallback cb)
     {
-      onStateCallback = cb;
+      onStateChangedCallback = cb;
     }
 
     void loop(unsigned long now) {
@@ -37,8 +37,8 @@ class PushButton
         else if (now - newState_ms > threshold_ms) {
           setState(s);
 
-          if (onStateCallback != NULL)
-            onStateCallback();
+          if (onStateChangedCallback != NULL)
+            onStateChangedCallback(state);
         }
       }
     }
@@ -48,7 +48,7 @@ class PushButton
     unsigned int threshold_ms;
     unsigned long newState_ms = 0;
     ButtonState state = ButtonState::Off, lastState = ButtonState::Off, newState = ButtonState::Off;
-    ButtonEventCallback onStateCallback = NULL;
+    ButtonStateCallback onStateChangedCallback = NULL;
 
     void setState(int value) {
       log_d("PushButton @%d: value=%d", pin, value);
@@ -60,10 +60,10 @@ class PushButton
 
 class ToggleButton {
   public:
-    ToggleButton(uint8_t pin, unsigned int threshold_ms = 100, uint8_t pinModeConfig = INPUT) : btn(pin, threshold_ms, pinModeConfig)
+    ToggleButton(uint8_t pin, unsigned int threshold_ms = 100, uint8_t pinModeConfig = INPUT, ButtonState state = ButtonState::Off) 
+      : btn(pin, threshold_ms, pinModeConfig), state(state)
     { 
-      btn.onChanged([this]() { onPushButtonStateChanged(); });
-      state = btn.getState();
+      btn.onButtonStateChanged([this](ButtonState s) { onPushButtonStateChanged(s); });
     }
 
     ButtonState getState()
@@ -71,9 +71,9 @@ class ToggleButton {
       return state;
     }
 
-    void onChanged(ButtonEventCallback cb)
+    void onButtonStateChanged(ButtonStateCallback cb)
     {
-      onStateCallback = cb;
+      onStateChangedCallback = cb;
     }
 
     void loop(unsigned long now) {
@@ -83,13 +83,15 @@ class ToggleButton {
   private:
     PushButton btn;
     ButtonState state = ButtonState::Off;
-    ButtonEventCallback onStateCallback = NULL;
+    ButtonStateCallback onStateChangedCallback = NULL;
 
-    void onPushButtonStateChanged() {
-      state = state == ButtonState::Off ? ButtonState::Off : ButtonState::On;
+    void onPushButtonStateChanged(ButtonState s) {
+      if (s == ButtonState::On) {
+        state = state == ButtonState::On ? ButtonState::Off : ButtonState::On;
 
-      if (onStateCallback != NULL)
-        onStateCallback();
+        if (onStateChangedCallback != NULL)
+          onStateChangedCallback(state);
+      }
     }
 };
 
