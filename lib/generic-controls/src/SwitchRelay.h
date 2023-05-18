@@ -39,11 +39,11 @@ class SwitchRelay {
 
 class SwitchRelayPin : public SwitchRelay {
   public:
-    SwitchRelayPin(uint8_t pin) : SwitchRelayPin(pin, 1)
+    SwitchRelayPin(uint8_t pin, SwitchState state = SwitchState::Off) : SwitchRelayPin(pin, 1, state)
     { }
 
-    SwitchRelayPin(uint8_t pin, uint8_t onValue, uint8_t pinModeType = OUTPUT)
-      : SwitchRelay(), pin(pin), onValue(onValue), offValue(onValue ? 0 : 1)
+    SwitchRelayPin(uint8_t pin, uint8_t onValue, SwitchState state = SwitchState::Off, uint8_t pinModeType = OUTPUT)
+      : SwitchRelay(), pin(pin), onValue(onValue), state(state), offValue(onValue ? 0 : 1)
     { 
       pinMode(pin, pinModeType);
       setState(state);

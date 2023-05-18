@@ -34,7 +34,7 @@ Preferences preferences;
 WiFiClient wifiClient;
 PubSub pubsub(wifiClient);
 
-SwitchRelayPin swAudioPower(RELAY_AUDIO_PIN);
+SwitchRelayPin swAudioPower(RELAY_AUDIO_PIN, (SwitchState)preferences.getUChar("audio_state"));
 SwitchRelayPin relayBlindsUp(RELAY_BLINDS_UP_PIN, 0);
 SwitchRelayPin relayBlindsDown(RELAY_BLINDS_DOWN_PIN, 0);
 ToggleButton button1(BUTTON_1_PIN, 100, INPUT_PULLUP, (ButtonState)preferences.getUChar("button1_state"));
@@ -116,8 +116,7 @@ void onPubSubBlindsStateSet(uint8_t *payload, unsigned int length) {
 void onPubSubAudioStateSet(uint8_t *payload, unsigned int length) {
   if (length == 0) return;
 
-  bool val = parseBooleanMessage(payload, length);
-  if (val) swAudioPower.setOn();
+  if (parseBooleanMessage(payload, length)) swAudioPower.setOn();
   else swAudioPower.setOff();
 }
 
@@ -135,14 +134,17 @@ void onButton1StateChanged(ButtonState state) {
 }
 
 void onAudioPowerStateChanged() {
-  if (swAudioPower.getState() == SwitchState::Off) {
+  auto state = swAudioPower.getState();
+  if (state == SwitchState::Off) {
     digitalWrite(BUTTON_1_LED_PIN, 1);
     pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "1");
   }
   else {
     digitalWrite(BUTTON_1_LED_PIN, 0);
-    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "0");
+    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "0"); 
   }
+
+  preferences.putUChar("audio_state", (uint8_t)state);
 }
 
 void setup() {
