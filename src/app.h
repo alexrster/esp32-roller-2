@@ -45,7 +45,7 @@
 // #define BUTTON_1_LED_PIN              34
 #define BUTTON_1_LED_PIN              INT_LED_PIN
 
-#define BLINDS_ROLLING_TIMELIMIT_MS   60000
+#define BLINDS_ROLLING_TIMELIMIT_MS   90000
 
 extern bool parseBooleanMessage(byte* payload, unsigned int length, boolean defaultValue = false);
 
