@@ -35,10 +35,10 @@ WiFiClient wifiClient;
 PubSub pubsub(wifiClient);
 
 SwitchRelayPin swAudioPower(RELAY_AUDIO_PIN, (SwitchState)preferences.getUChar("audio_state"));
-SwitchRelayPin relayBlindsUp(RELAY_BLINDS_UP_PIN, 0);
-SwitchRelayPin relayBlindsDown(RELAY_BLINDS_DOWN_PIN, 0);
+SwitchRelayPin swBlindsPower(RELAY_BLINDS_POWER_PIN, 0);
+SwitchRelayPin swBlindsDirection(RELAY_BLINDS_DIRECTION_PIN, 0);
 ToggleButton button1(BUTTON_1_PIN, 100, INPUT_PULLUP, (ButtonState)preferences.getUChar("button1_state"));
-BlindsController blindsController(relayBlindsUp, relayBlindsDown, REEDSWITCH_1_PIN, (BlindsState)preferences.getUChar("blinds_state"));
+AcMotorBlindsController blindsController(swBlindsPower, swBlindsDirection, REEDSWITCH_1_PIN, (BlindsState)preferences.getUChar("blinds_state"));
 
 void restart(char code) {
   preferences.putULong("SW_RESET_UPTIME", millis());
@@ -95,7 +95,7 @@ void otaError(ota_error_t error) {
   restart(RESET_ON_OTA_FAIL);
 }
 
-void onPubSubRestart(uint8_t *payload, unsigned int length) { 
+void onPubSubRestart(uint8_t *payload, unsigned int length) {
   restart(RESET_ON_MQTT_RESET_TOPIC);
 }
 

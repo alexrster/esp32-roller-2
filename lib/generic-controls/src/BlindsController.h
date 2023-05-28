@@ -18,12 +18,6 @@ typedef std::function<void()> BlindsStateChangedCallback;
 
 class BlindsController {
   public:
-    BlindsController(SwitchRelayPin motorUp, SwitchRelayPin motorDown, uint8_t edgeDetectorPin, BlindsState state = BlindsState::Unknown)
-      : motorUp(motorUp), motorDown(motorDown), edgeDetectorPin(edgeDetectorPin), state(state)
-    { 
-      pinMode(edgeDetectorPin, INPUT_PULLUP);
-    }
-
     void onBlindsStateChanged(BlindsStateChangedCallback cb) {
       blindsStateChangedCb = cb;
     }
@@ -80,36 +74,18 @@ class BlindsController {
       }
     }
 
-    void pushUp() {
-      if (state == BlindsState::FullUp || state == BlindsState::RollingUp) return;
-      motorDown.setOff();
-
-      setState(BlindsState::RollingUp);
-      motorUp.setOn();
-    }
-
-    void pushDown() {
-      if (state == BlindsState::FullDown || state == BlindsState::RollingDown) return;
-      motorUp.setOff();
-
-      setState(BlindsState::RollingDown);
-      motorDown.setOn();
-    }
-
-    void stop() {
-      setState(BlindsState::Stopped);
-      motorUp.setOff();
-      motorDown.setOff();
-    }
+    virtual void pushUp() { }
+    virtual void pushDown() { }
+    virtual void stop() { }
   
-  private:
-    SwitchRelayPin motorUp;
-    SwitchRelayPin motorDown;
-    uint8_t edgeDetectorPin;
+  protected:
     BlindsState state;
-    unsigned long lastBlindsRead = 0, rollingStartTime = 0;
-    int lastEdgeDetectorValue = 0;
-    BlindsStateChangedCallback blindsStateChangedCb = NULL;
+
+    BlindsController(uint8_t edgeDetectorPin, BlindsState state = BlindsState::Unknown)
+      : edgeDetectorPin(edgeDetectorPin), state(state)
+    { 
+      pinMode(edgeDetectorPin, INPUT_PULLUP);
+    }
 
     void setState(BlindsState s) {
       if (state == s) return;
@@ -121,6 +97,84 @@ class BlindsController {
       if (blindsStateChangedCb != NULL)
         blindsStateChangedCb();
     }
+
+  private:
+    uint8_t edgeDetectorPin;
+    unsigned long lastBlindsRead = 0, rollingStartTime = 0;
+    int lastEdgeDetectorValue = 0;
+    BlindsStateChangedCallback blindsStateChangedCb = NULL;
+};
+
+class DcMotorBlindsController : public BlindsController {
+  public:
+    DcMotorBlindsController(SwitchRelayPin motorUp, SwitchRelayPin motorDown, uint8_t edgeDetectorPin, BlindsState state = BlindsState::Unknown)
+      : BlindsController(edgeDetectorPin, state), motorUp(motorUp), motorDown(motorDown)
+    { }
+
+    virtual void pushUp() {
+      if (state == BlindsState::FullUp || state == BlindsState::RollingUp) return;
+      stop();
+      delay(200);
+
+      setState(BlindsState::RollingUp);
+      motorUp.setOn();
+    }
+
+    virtual void pushDown() {
+      if (state == BlindsState::FullDown || state == BlindsState::RollingDown) return;
+      stop();
+      delay(200);
+
+      setState(BlindsState::RollingDown);
+      motorDown.setOn();
+    }
+
+    virtual void stop() {
+      setState(BlindsState::Stopped);
+      motorUp.setOff();
+      motorDown.setOff();
+    }
+
+  private:
+    SwitchRelayPin motorUp;
+    SwitchRelayPin motorDown;
+};
+
+class AcMotorBlindsController : public BlindsController {
+  public:
+    AcMotorBlindsController(SwitchRelayPin swPower, SwitchRelayPin swDirection, uint8_t edgeDetectorPin, BlindsState state = BlindsState::Unknown)
+      : BlindsController(edgeDetectorPin, state), swPower(swPower), swDirection(swDirection)
+    { }
+
+    virtual void pushUp() {
+      if (state == BlindsState::FullUp || state == BlindsState::RollingUp) return;
+      stop();
+      delay(100);
+
+      setState(BlindsState::RollingUp);
+      swDirection.setOff(); // UP -> Off, DOWN -> On
+      swPower.setOn();
+    }
+
+    virtual void pushDown() {
+      if (state == BlindsState::FullDown || state == BlindsState::RollingDown) return;
+      stop();
+      delay(100);
+
+      setState(BlindsState::RollingDown);
+      swDirection.setOn(); // UP -> Off, DOWN -> On
+      swPower.setOn();
+    }
+
+    virtual void stop() {
+      setState(BlindsState::Stopped);
+      swPower.setOff();
+      swDirection.setOff();
+    }
+
+  private:
+    SwitchRelayPin swPower;
+    SwitchRelayPin swDirection;
 };
 
 #endif
