@@ -137,11 +137,11 @@ void onAudioPowerStateChanged() {
   auto state = swAudioPower.getState();
   if (state == SwitchState::Off) {
     digitalWrite(BUTTON_1_LED_PIN, 1);
-    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "1");
+    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "1", true);
   }
   else {
     digitalWrite(BUTTON_1_LED_PIN, 0);
-    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "0"); 
+    pubsub.publish(MQTT_PATH_PREFIX "/audio/state", "0", true);
   }
 
   preferences.putUChar("audio_state", (uint8_t)state);
@@ -199,6 +199,7 @@ bool onJustStarted() {
 
   result &= pubsub.publish(MQTT_PATH_PREFIX "/button_1/state", button1.getState() == ButtonState::On ? "1" : "0", true);
   result &= pubsub.publish(MQTT_PATH_PREFIX "/blinds/state", blindsController.getStateString().c_str(), true);
+  result &= pubsub.publish(MQTT_PATH_PREFIX "/audio/state", swAudioPower.getState() == SwitchState::On ? "1" : "0", true);
   onBlindsStateChanged();
 
   return result;

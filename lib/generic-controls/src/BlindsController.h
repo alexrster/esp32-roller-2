@@ -8,6 +8,7 @@ enum class BlindsState : uint8_t {
   Unknown = 0,
   RollingUp,
   RollingDown,
+  Stopped,
   FullUp,
   FullDown,
   Obstructed
@@ -66,6 +67,8 @@ class BlindsController {
           return "RollingUp";
         case BlindsState::RollingDown:
           return "RollingDown";
+        case BlindsState::Stopped:
+          return "Stopped";
         case BlindsState::FullUp:
           return "FullUp";
         case BlindsState::FullDown:
@@ -94,6 +97,7 @@ class BlindsController {
     }
 
     void stop() {
+      setState(BlindsState::Stopped);
       motorUp.setOff();
       motorDown.setOff();
     }
